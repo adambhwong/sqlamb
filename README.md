@@ -1,31 +1,32 @@
 # sqlamb
-SQL Alliance Metrics Blender
+SQL Alliance Metrics Blender (SQLamb)  
+---
 
-A python side-car proxy (interceptor) which aims to blend the influxdb query and other data source query result to provide additional features:  
+This project aims to implment a data blender for multiple datasources to serve Grafana as camouflaged Influxdb datasource. To reduce the administration overhead and simplify the development work on dashboard, it should avoid involving any backend coding on doing queries, and provide a common query language support to serve as grab-n-go style. As a result, SQLamb is designed to take a combination of JSON and originated ?QL to fufill the requirement. It provides following features:
 
-- join queries  
-- forward all requests other then "query" to the default influxdb (debug/pprof, debug/requests, debug/vars, ping, write)  
+- join queries results by using SQL  
+- forward all requests other then "query" to the provided influxdb in the request parameter (debug/pprof, debug/requests, debug/vars, ping, write)  
 - for "query" requests, only intercept if query string is a valid JSON structure  
 - datasource support can be expended, currently support InfluxQL, MySQL, Solarwinds (SWQL)
 - provide "group by time interval" translation in joint query statement to perform time-series like group by interval feature
 - optional parameter 'table' in query end point to allow returning result in table form instead of time series by setting it with 'true'.
  
-It works by saving query result from list of queries including time series result set or SQL result set to an in-memory SQLite db. For time series result set, it will be transformed to data frame format before writing to SQLite. And then use joint statement to blend the data from saved tables in the SQLite db, and the result will be returned as time series result set by default or data frame if 'table' paramter is set to 'true'.  
+SQLamb works by saving results from list of queries including time series data set or SQL data set to an in-memory SQLite db. For time series result set, it will be transformed to data frame format before writing to SQLite. And then use joint statement to blend the data from saved tables in the SQLite db, and the result will be returned as time series result set by default or data frame if 'table' paramter is set to 'true'.  
 
 Below is the JSON query structure:
 ```
 {
     "queries": [
         {
-            "alias": ,                      #an alias to be used as table name in sqlite db
-            "datasource": ,                 #datasource defined in config file
-            "statement":                    #query statement
+            "alias": "",                      #an alias to be used as table name in sqlite db
+            "datasource": "",                 #datasource defined in config file
+            "statement": ""                   #query statement
         }[,...]
     ],
-    "joint": {                              #"joint" is optional
-          "alias": ,                        #an alias to be used as the name in the result set data
-          "tags": [,...],                   #list of columns from query result to be treated as tags in returned time series data
-          "statement":                      #sqlite query statement
+    "joint": {                                #"joint" is optional
+          "alias": "",                        #an alias to be used as the name in the result set data
+          "tags": ["",...],                   #list of columns from query result to be treated as tags in returned time series data
+          "statement": ""                     #sqlite query statement
      }
 }
 ```
@@ -186,4 +187,16 @@ Sample queries
 }
 ```  
 
+Limitations:  
 
+- no authentication supported in current release  
+- query translation only support select statments  
+
+
+Todo:  
+
+- externalize datasource configuration  
+- add interface for datasources administration  
+- adopt plugin based design for datasoruce type support  
+- add RBAC support to control datasources access permission  
+- add debug endpoint to provide performance statistics based on each query execution  

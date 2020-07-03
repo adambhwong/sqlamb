@@ -343,7 +343,7 @@ class Sql2Json:
         startTs = None
         endTs = int(time.time()*EPOCH_MAP[self.epoch])
         updateTmFilter = False
-        ptn = re.compile(r'[0-9]+ms')
+        ptn = re.compile(r'[0-9]+{0}'.format(self.epoch))
         ml = list(re.finditer(ptn, s))
         if len(ml) > 0:
             updateTmFilter = True
@@ -351,7 +351,7 @@ class Sql2Json:
             m = ml.pop()
             logging.debug("found: {0}".format(m.group(0)))
             dt = datetime.fromtimestamp(int(m.group(0)[:-2])/EPOCH_MAP[self.epoch])
-            ts = int(dt.strftime('%s'))*tsUnit
+            ts = int(dt.strftime('%s'))*EPOCH_MAP[self.epoch]
             if re.match(r'.*time *>=* *$', s[:m.start(0)]):
                 startTs = ts
                 logging.debug("startTs = {0}".format(startTs))
@@ -367,7 +367,6 @@ class Sql2Json:
         return s.strip()
 
     def convertTimeDelta(self, s):
-        tsUnit = EPOCH_MAP[self.epoch]
         unitMap = TIME_UNIT_MAP
         startTs = None
         endTs = int(time.time()*EPOCH_MAP[self.epoch])
@@ -470,7 +469,9 @@ class Sql2Json:
     def genTimeSeriesSubquery(self, sqlJson, interval, groupCols):
         subq = copy.deepcopy(SELECT_TEMPLATE)
         limit = int((self.tmFilter["end"] - self.tmFilter["start"])/interval) + 1
-        startTs = self.tmFilter["start"] + (interval - (self.tmFilter["start"] % interval))
+        startTs = self.tmFilter["start"]
+        if (self.tmFilter["start"] % interval) > 0:
+            startTs += (interval - (self.tmFilter["start"] % interval))
         seriesAlias = "series_{0}".format(int(startTs))
         subq["with"] = {
             "recursive": True,

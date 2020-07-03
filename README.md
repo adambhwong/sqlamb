@@ -200,3 +200,4 @@ Todo:
 - adopt plugin based design for datasoruce type support  
 - add RBAC support to control datasources access permission  
 - add debug endpoint to provide performance statistics based on each query execution  
+- replace sqlite with spark

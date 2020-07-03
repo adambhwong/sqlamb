@@ -46,7 +46,7 @@ DATASOURCES = {
     },
     "solarwinds": {
         "dbtype": "solarwinds",
-        "host": os.getenv("DATASOURCES_3_HOST", "us-smy-wpswweb1"),
+        "host": os.getenv("DATASOURCES_3_HOST", "us-azr-pudapi01"),
         "port": 17778,
         "credential": "solarwinds"
     },

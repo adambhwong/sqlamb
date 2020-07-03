@@ -16,7 +16,7 @@ DEFAULT_EPOCH=conf.DEFAULT_EPOCH
 logging.basicConfig(level=LOG_CFG["level"],datefmt=LOG_CFG["datefmt"],format=LOG_CFG["format"])
 
 class GenericQueryResult:
-    def __init__(self, alias, dsName, statement, epoch=DEFAULT_EPOCH):
+    def __init__(self, alias, dsName, statement, epoch=DEFAULT_EPOCH, interval=None):
         self.dbConn = None
         self.errMsg = None
         self.resultSet = None
@@ -24,6 +24,7 @@ class GenericQueryResult:
         self.dsName = dsName
         self.statement = statement
         self.epoch = epoch
+        self.interval = interval
         if self.dsName not in DATASOURCES:
             logging.error("Data source '{0}' not defined.".format(self.dsName))
             return None
@@ -52,14 +53,17 @@ class GenericQueryResult:
         if ds["dbtype"] == "influxdb":
             self.dbConn = InfluxdbConn(ds["host"], ds["port"], ds["db"], ds["credential"], self.dsName, self.epoch)
         elif ds["dbtype"] == "mysql":
-            self.dbConn = MysqlConn(ds["host"], ds["port"], ds["db"], ds["credential"], self.dsName)
+            self.dbConn = MysqlConn(ds["host"], ds["port"], ds["db"], ds["credential"], self.dsName, self.epoch, self.interval)
         elif ds["dbtype"] == "solarwinds":
-            self.dbConn = SolarwindsConn(ds["host"], ds["credential"], self.dsName)
+            self.dbConn = SolarwindsConn(ds["host"], ds["credential"], self.dsName, self.epoch, self.interval)
         if ds["dbtype"] in ["mysql", "solarwinds"]:
             self.statement = GenericQueryResult.qryTrans(self.statement)
         if self.dbConn is not None:
-            self.resultSet = self.dbConn.query(self.statement)
-        logging.debug("{0} query reslt: \n{1}".format(self.dsName, json.dumps(self.resultSet, indent=4)))
+            try:
+                self.resultSet = self.dbConn.query(self.statement)
+            except Exception as e:
+                logging.error(e)
+        #logging.debug("{0} query reslt: \n{1}".format(self.dsName, json.dumps(self.resultSet, indent=4)))
         
 class InfluxdbHttpApi:
     def __init__(self, url=INFLUXQL_FW_TARGET):
@@ -77,9 +81,10 @@ class InfluxdbHttpApi:
         if orgReq.auth is not None:
             req.add_header('Authorization', orgReq.auth)
         if bytedata is not None:
-            req.add_header('Content-Type', orgReq.content_type)
+            if orgReq.content_type:
+                req.add_header('Content-Type', orgReq.content_type)
             req.add_header('Content-Length', orgReq.content_length)
-        logging.debug("req = {0}".format(req))
+        logging.debug("req: [{0}] {1} data: {2} headers: {3}".format(req.method, req.full_url, req.data, req.header_items()))
         try:
             resp = request.urlopen(req)
         except error.HTTPError as e:
@@ -97,7 +102,7 @@ class HttpForwarder:
 
     def submit(self):
         resp = InfluxdbHttpApi().forward("{0}?{1}".format(self.path, self.req.query_string), self.req, method=self.method, reqData=self.reqData)
-        logging.debug("resp = {0}".format(resp))
+        #logging.debug("resp = [{0}] ".format(resp))
         return resp
 
 class JsonQueryHandler:
@@ -106,7 +111,21 @@ class JsonQueryHandler:
         self.epoch = epoch
         self.tableFormat = tableFormat
         self.jsonQuery = json.loads(query)
+        self.interval = self.getJointInterval()
         logging.debug("jsonQuery: \n{0}".format(json.dumps(self.jsonQuery, indent=4)))
+
+    def getJointInterval(self):
+        interval = None
+        if "joint" in self.jsonQuery:
+            ptn = re.compile(r' _INTERVAL_\(+.*?[^\\]\)_')
+            q = self.jsonQuery["joint"]["statement"]
+            ml = list(re.finditer(ptn, q))
+            if ml:
+                m = ml[-1]
+                logging.debug("found: {0}".format(m.group(0)))
+                interval = re.sub(r',.*\)_$', "", m.group(0).replace(" _INTERVAL_(", "")).strip()
+                logging.debug("interval: {0}".format(interval))
+        return interval
 
     def execute(self):
         genericQryRsts = {}
@@ -115,7 +134,7 @@ class JsonQueryHandler:
         result = { "results": [{ "statement_id": 0, "series": [] }] }
         sqliteConn = SqliteConn(epoch=self.epoch)
         for q in self.jsonQuery["queries"]:
-            genericQryRsts[q["alias"]] = GenericQueryResult(q["alias"], q["datasource"], q["statement"])
+            genericQryRsts[q["alias"]] = GenericQueryResult(q["alias"], q["datasource"], q["statement"], self.epoch, self.interval)
             if "joint" in self.jsonQuery:
                 if genericQryRsts[q["alias"]].resultType in ["influxdb"]:
                     sqliteConn.importTsData(q["alias"], genericQryRsts[q["alias"]].resultSet)

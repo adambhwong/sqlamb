@@ -20,7 +20,6 @@ class PingResource:
 
     def on_get(self, req, resp):
         result = ifpx.HttpForwarder("/ping", req).submit()
-        logging.debug(type(result))
         resp.status = eval("falcon.HTTP_{0}".format(result.code))
         resp.set_headers(result.getheaders())
         resp.body = utf8Decode(result.read())
